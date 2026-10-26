@@ -85,12 +85,13 @@ try {
         $status.Hide()
         $dialog = New-Object System.Windows.Forms.OpenFileDialog
         $dialog.Title='가상폰에 넣을 테스트 사진 고르기'
-        $dialog.Filter='사진|*.jpg;*.jpeg;*.png;*.webp'
+        $dialog.Filter='사진|*.jpg;*.jpeg;*.jfif;*.png;*.webp'
         $dialog.Multiselect=$true
         if ($dialog.ShowDialog() -eq 'OK') {
             $folder = Invoke-Adb -AdbArgs @('-s', $serial, 'shell', 'mkdir', '-p', '/sdcard/Pictures/HaruTest')
             foreach ($file in $dialog.FileNames) {
                 $extension=[IO.Path]::GetExtension($file).ToLowerInvariant()
+                if ($extension -eq '.jfif') { $extension='.jpg' }
                 $remote='/sdcard/Pictures/HaruTest/'+[Guid]::NewGuid().ToString('N')+$extension
                 $copy = Invoke-Adb -AdbArgs @('-s', $serial, 'push', $file, $remote)
                 if ($copy.Code -ne 0) { throw '사진을 가상폰으로 복사하지 못했어요.' }
