@@ -17,6 +17,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int tab = 0;
+  bool diaryImages = false;
   Future<void> _newSticker() => Navigator.of(
     context,
   ).push(MaterialPageRoute(builder: (_) => StickerForm(store: widget.store)));
@@ -108,13 +109,42 @@ class _HomeScreenState extends State<HomeScreen> {
                       : '나의 일기 ${widget.store.diaries.length}편',
                   style: const TextStyle(color: muted, fontSize: 12),
                 ),
+                if (tab == 1) ...[
+                  const SizedBox(height: 16),
+                  ToggleButtons(
+                    borderRadius: BorderRadius.circular(12),
+                    constraints: const BoxConstraints(
+                      minWidth: 48,
+                      minHeight: 40,
+                    ),
+                    isSelected: [!diaryImages, diaryImages],
+                    onPressed: (index) =>
+                        setState(() => diaryImages = index == 1),
+                    selectedColor: moss,
+                    fillColor: const Color(0xFFE7EBDD),
+                    children: const [
+                      Tooltip(
+                        message: '가로 목록',
+                        child: Icon(Icons.view_list_outlined),
+                      ),
+                      Tooltip(
+                        message: '이미지 모아보기',
+                        child: Icon(Icons.grid_view_rounded),
+                      ),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),
           Expanded(
             child: tab == 0
                 ? StickerBoard(store: widget.store, onAdd: _newSticker)
-                : _DiaryList(store: widget.store, onAdd: _newDiary),
+                : _DiaryList(
+                    store: widget.store,
+                    onAdd: _newDiary,
+                    images: diaryImages,
+                  ),
           ),
         ],
       ),
@@ -272,61 +302,115 @@ class _StickerBoardState extends State<StickerBoard> {
 }
 
 class _DiaryList extends StatelessWidget {
-  const _DiaryList({required this.store, required this.onAdd});
+  const _DiaryList({
+    required this.store,
+    required this.onAdd,
+    required this.images,
+  });
   final DiaryStore store;
   final VoidCallback onAdd;
+  final bool images;
+  void _open(BuildContext context, Diary diary) => Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) => DiaryView(store: store, id: diary.id),
+    ),
+  );
   @override
-  Widget build(BuildContext context) => store.diaries.isEmpty
-      ? EmptyNote(
-          icon: Icons.edit_note_outlined,
-          title: '첫 번째 하루를 남겨보세요',
-          message: '글 몇 줄과 내가 모은 스티커면 충분해요.',
-          button: FilledButton(onPressed: onAdd, child: const Text('일기 쓰기')),
-        )
-      : ListView.separated(
+  Widget build(BuildContext context) {
+    final diaries = store.diaries;
+    if (diaries.isEmpty) {
+      return EmptyNote(
+        icon: Icons.edit_note_outlined,
+        title: '첫 번째 하루를 남겨보세요',
+        message: '글 몇 줄과 내가 모은 스티커면 충분해요.',
+        button: FilledButton(onPressed: onAdd, child: const Text('일기 쓰기')),
+      );
+    }
+    if (images) {
+      return LayoutBuilder(
+        builder: (context, constraints) => GridView.builder(
+          key: const PageStorageKey('diary-images'),
           padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
-          itemCount: store.diaries.length,
-          separatorBuilder: (_, _) => const SizedBox(height: 12),
-          itemBuilder: (context, i) {
-            final d = store.diaries[i];
-            return Card(
-              elevation: 0,
-              color: const Color(0xFFF0EBDD),
-              child: ListTile(
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 18,
-                  vertical: 12,
-                ),
-                leading: SizedBox(
-                  width: 45,
-                  child: d.placements.isEmpty
-                      ? const Icon(Icons.menu_book_outlined, color: moss)
-                      : StickerImage(
-                          store: store,
-                          sticker: store.sticker(d.placements.first.stickerId),
-                        ),
-                ),
-                title: Text(
-                  dateLabel(d.date),
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
-                subtitle: Padding(
-                  padding: const EdgeInsets.only(top: 6),
-                  child: Text(
-                    d.body.isEmpty ? '스티커로 남긴 하루' : d.body,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => DiaryView(store: store, id: d.id),
-                  ),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: constraints.maxWidth < 300
+                ? 1
+                : math.max(2, (constraints.maxWidth / 260).ceil()),
+            childAspectRatio: .707,
+            crossAxisSpacing: 16,
+            mainAxisSpacing: 20,
+          ),
+          itemCount: diaries.length,
+          itemBuilder: (context, index) {
+            final diary = diaries[index];
+            return Semantics(
+              button: true,
+              label: '${dateLabel(diary.date)} 일기 열기',
+              child: Material(
+                color: const Color(0xFFFFFDF7),
+                borderRadius: BorderRadius.circular(6),
+                clipBehavior: Clip.antiAlias,
+                elevation: 1,
+                child: InkWell(
+                  key: ValueKey('diary-preview-${diary.id}'),
+                  onTap: () => _open(context, diary),
+                  child: DiaryThumbnail(store: store, diary: diary),
                 ),
               ),
             );
           },
+        ),
+      );
+    }
+    return ListView.separated(
+      key: const PageStorageKey('diary-list'),
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
+      itemCount: diaries.length,
+      separatorBuilder: (_, _) => const SizedBox(height: 12),
+      itemBuilder: (context, i) {
+        final d = diaries[i];
+        return Card(
+          elevation: 0,
+          color: const Color(0xFFF0EBDD),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: () => _open(context, d),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 48,
+                    child: DiaryThumbnail(store: store, diary: d),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          dateLabel(d.date),
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: Text(
+                            d.body.isEmpty ? '스티커로 남긴 하루' : d.body,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const Icon(Icons.chevron_right, color: muted),
+                ],
+              ),
+            ),
+          ),
         );
+      },
+    );
+  }
 }

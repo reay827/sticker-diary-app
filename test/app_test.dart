@@ -93,7 +93,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('일기장'));
       await tester.pumpAndSettle();
-      expect(find.text('오늘은 커피 한 잔.\n작은 행복.'), findsOneWidget);
+      expect(find.text('오늘은 커피 한 잔.\n작은 행복.'), findsWidgets);
       expect(tester.takeException(), isNull);
     },
   );
@@ -176,6 +176,64 @@ void main() {
         draft.placements.map((p) => p.toJson()).toList(),
       );
       await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
+  testWidgets(
+    'diary layout toggles show full pages and open the correct diary',
+    (tester) async {
+      tester.view.physicalSize = const Size(430, 932);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final older = Diary.empty()
+        ..date = DateTime(2026, 10, 20)
+        ..body = '지난날의 조각';
+      final newer = Diary.empty()
+        ..date = DateTime(2026, 10, 26)
+        ..body = '오늘의 조각';
+      await tester.runAsync(() async {
+        await store.saveDiary(older);
+        await store.saveDiary(newer);
+      });
+      await tester.pumpWidget(StickerDiaryApp(store: store));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('일기장'));
+      await tester.pumpAndSettle();
+      expect(find.byType(GridView), findsNothing);
+      expect(
+        tester
+            .widgetList<DiaryThumbnail>(find.byType(DiaryThumbnail))
+            .map((p) => p.diary.id),
+        [newer.id, older.id],
+      );
+      await tester.tap(find.byTooltip('이미지 모아보기'));
+      await tester.pumpAndSettle();
+      expect(find.byType(GridView), findsOneWidget);
+      expect(
+        tester
+            .widgetList<DiaryThumbnail>(find.byType(DiaryThumbnail))
+            .map((p) => p.diary.id),
+        [newer.id, older.id],
+      );
+      await tester.tap(find.byKey(ValueKey('diary-preview-${older.id}')));
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<DiaryPage>(find.byType(DiaryPage)).diary.id,
+        older.id,
+      );
+      await tester.tap(find.byType(BackButton));
+      await tester.pumpAndSettle();
+      expect(find.byType(GridView), findsOneWidget);
+      await tester.tap(find.text('내 스티커'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('일기장'));
+      await tester.pumpAndSettle();
+      expect(find.byType(GridView), findsOneWidget);
+      await tester.tap(find.byTooltip('가로 목록'));
+      await tester.pumpAndSettle();
+      expect(find.byType(GridView), findsNothing);
+      expect(find.text('오늘의 조각'), findsWidgets);
+      expect(tester.takeException(), isNull);
     },
   );
 }

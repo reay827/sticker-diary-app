@@ -135,6 +135,32 @@ class EmptyNote extends StatelessWidget {
   );
 }
 
+class DiaryThumbnail extends StatelessWidget {
+  const DiaryThumbnail({super.key, required this.store, required this.diary});
+  final DiaryStore store;
+  final Diary diary;
+  @override
+  Widget build(BuildContext context) => AspectRatio(
+    aspectRatio: .707,
+    child: ClipRect(
+      child: IgnorePointer(
+        child: ExcludeSemantics(
+          // Render at a fixed page size and scale the whole composition, including
+          // text, rather than reflowing the text into a small tile.
+          child: FittedBox(
+            fit: BoxFit.contain,
+            child: SizedBox(
+              width: 400,
+              height: 400 / .707,
+              child: DiaryPage(store: store, diary: diary),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
 class DiaryPage extends StatelessWidget {
   const DiaryPage({
     super.key,
