@@ -4,7 +4,7 @@
         android:label="하루 조각"
         android:allowBackup="false"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@drawable/ic_haru">
         <activity
             android:name=".MainActivity"
             android:exported="true"

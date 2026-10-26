@@ -214,39 +214,44 @@ class DiaryPage extends StatelessWidget {
                     height: p.width * w,
                     child: Transform.rotate(
                       angle: p.angle,
-                      child: GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTap: onSelect == null ? null : () => onSelect!(p.id),
-                        onPanStart: onMove == null
-                            ? null
-                            : (_) => onSelect?.call(p.id),
-                        onPanUpdate: onMove == null
-                            ? null
-                            : (details) {
-                                // Gesture deltas are measured in the rotated local coordinate space.
-                                final d = details.delta;
-                                onMove!(
-                                  p.id,
-                                  Offset(
-                                    (d.dx * math.cos(p.angle) -
-                                            d.dy * math.sin(p.angle)) /
-                                        w,
-                                    (d.dx * math.sin(p.angle) +
-                                            d.dy * math.cos(p.angle)) /
-                                        h,
-                                  ),
-                                );
-                              },
-                        child: Container(
-                          decoration: BoxDecoration(
-                            border: selected == p.id
-                                ? Border.all(color: moss, width: 1.5)
-                                : null,
-                          ),
-                          padding: const EdgeInsets.all(3),
-                          child: StickerImage(
-                            store: store,
-                            sticker: store.sticker(p.stickerId),
+                      child: IgnorePointer(
+                        ignoring: child != null,
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: onSelect == null
+                              ? null
+                              : () => onSelect!(p.id),
+                          onPanStart: onMove == null
+                              ? null
+                              : (_) => onSelect?.call(p.id),
+                          onPanUpdate: onMove == null
+                              ? null
+                              : (details) {
+                                  // Gesture deltas are measured in the rotated local coordinate space.
+                                  final d = details.delta;
+                                  onMove!(
+                                    p.id,
+                                    Offset(
+                                      (d.dx * math.cos(p.angle) -
+                                              d.dy * math.sin(p.angle)) /
+                                          w,
+                                      (d.dx * math.sin(p.angle) +
+                                              d.dy * math.cos(p.angle)) /
+                                          h,
+                                    ),
+                                  );
+                                },
+                          child: Container(
+                            decoration: BoxDecoration(
+                              border: selected == p.id
+                                  ? Border.all(color: moss, width: 1.5)
+                                  : null,
+                            ),
+                            padding: const EdgeInsets.all(3),
+                            child: StickerImage(
+                              store: store,
+                              sticker: store.sticker(p.stickerId),
+                            ),
                           ),
                         ),
                       ),

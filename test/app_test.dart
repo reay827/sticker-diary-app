@@ -4,6 +4,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
 import 'package:sticker_diary/main.dart';
 import 'package:sticker_diary/store.dart';
+import 'package:sticker_diary/models.dart';
+import 'package:sticker_diary/widgets.dart';
+import 'package:sticker_diary/diary_screens.dart';
 
 void main() {
   late Directory temp;
@@ -111,4 +114,68 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('저장 전 내용'), findsOneWidget);
   });
+  testWidgets(
+    'drag and transform one reused sticker without moving the other',
+    (tester) async {
+      tester.view.physicalSize = const Size(430, 932);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final image = img.Image(width: 20, height: 20, numChannels: 4)
+        ..clear(img.ColorRgba8(80, 120, 80, 255));
+      await tester.runAsync(
+        () => store.addSticker(img.encodePng(image), '컵', DateTime(2026)),
+      );
+      final id = store.stickers.single.id;
+      final diary = Diary.empty()..body = '같은 컵 두 개';
+      diary.placements.addAll([
+        Placement(id: 'first', stickerId: id, x: .25, y: .5),
+        Placement(id: 'second', stickerId: id, x: .75, y: .7),
+      ]);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: DiaryEditor(store: store, diary: diary),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.drag(
+        find.byKey(const ValueKey('first')),
+        const Offset(35, -25),
+      );
+      await tester.pumpAndSettle();
+      var draft = tester.widget<DiaryPage>(find.byType(DiaryPage)).diary;
+      expect(draft.placements.last.id, 'first');
+      expect(draft.placements.last.x, greaterThan(.25));
+      expect(draft.placements.last.y, lessThan(.5));
+      expect(draft.placements.first.x, .75);
+      final sizeTrack = tester.getRect(find.byType(Slider).first);
+      await tester.tapAt(
+        Offset(sizeTrack.left + sizeTrack.width * .75, sizeTrack.center.dy),
+      );
+      await tester.pumpAndSettle();
+      final angleTrack = tester.getRect(find.byType(Slider).last);
+      await tester.tapAt(Offset(angleTrack.center.dx, angleTrack.center.dy));
+      await tester.pumpAndSettle();
+      draft = tester.widget<DiaryPage>(find.byType(DiaryPage)).diary;
+      expect(draft.placements.last.width, greaterThan(.3));
+      expect(draft.placements.last.angle, greaterThan(0));
+      expect(draft.placements.first.width, .3);
+      expect(draft.placements.first.angle, 0);
+      await tester.tap(find.text('저장'));
+      for (var i = 0; i < 100 && store.diaries.isEmpty; i++) {
+        await tester.pump();
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 20)),
+        );
+      }
+      await tester.pumpAndSettle();
+      final reopened = DiaryStore(temp);
+      await tester.runAsync(reopened.load);
+      expect(
+        reopened.diaries.single.placements.map((p) => p.toJson()).toList(),
+        draft.placements.map((p) => p.toJson()).toList(),
+      );
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
 }

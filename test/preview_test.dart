@@ -21,6 +21,9 @@ void main() {
     await (FontLoader(
       'NotoSansKR',
     )..addFont(rootBundle.load('assets/fonts/NotoSansKR.ttf'))).load();
+    await (FontLoader(
+      'MaterialIcons',
+    )..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'))).load();
     final key = GlobalKey();
     await tester.pumpWidget(
       RepaintBoundary(
