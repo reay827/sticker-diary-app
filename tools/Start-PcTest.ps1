@@ -8,6 +8,7 @@ $emulator = Join-Path $sdk 'emulator\emulator.exe'
 $script:adb = Join-Path $sdk 'platform-tools\adb.exe'
 $apk = Join-Path $project 'build\pc\haru-jogak-pc.apk'
 $env:ANDROID_HOME = $sdk
+$env:ANDROID_USER_HOME = Join-Path ([Environment]::GetFolderPath('UserProfile')) '.android'
 $env:ANDROID_AVD_HOME = Join-Path $devtools 'avd'
 $serial = 'emulator-5580'
 $avd = 'haru_pc'
@@ -60,13 +61,18 @@ try {
         $name = Invoke-Adb -AdbArgs @('-s', $serial, 'emu', 'avd', 'name')
         if ($name.Text -notmatch '(?m)^haru_pc\r?$') { throw '다른 가상폰이 테스트 연결을 사용하고 있어요. 실행 중인 가상폰을 닫고 다시 시도해 주세요.' }
     } else {
-        Start-Process -FilePath $emulator -ArgumentList @('-avd', $avd, '-port', '5580', '-no-boot-anim', '-gpu', 'auto', '-no-snapshot', '-netdelay', 'none', '-netspeed', 'full') -WindowStyle Normal -RedirectStandardOutput (Join-Path $logs 'emulator-output.log') -RedirectStandardError (Join-Path $logs 'emulator-error.log') | Out-Null
+        Start-Process -FilePath $emulator -ArgumentList @('-avd', $avd, '-port', '5580', '-gpu', 'auto', '-no-snapshot', '-netdelay', 'none', '-netspeed', 'full') -WindowStyle Normal -RedirectStandardOutput (Join-Path $logs 'emulator-output.log') -RedirectStandardError (Join-Path $logs 'emulator-error.log') | Out-Null
     }
     $deadline = (Get-Date).AddMinutes(5)
     $booted = $false
     while ((Get-Date) -lt $deadline) {
         $boot = Invoke-Adb -AdbArgs @('-s', $serial, 'shell', 'getprop', 'sys.boot_completed')
         if ($boot.Code -eq 0 -and $boot.Text.Trim() -eq '1') { $booted=$true; break }
+        if ($boot.Text -match 'unauthorized') {
+            $label.Text = "가상폰 화면에서 'Allow'를 눌러 주세요.`n'Always allow from this computer'도 체크해 주세요."
+        } else {
+            $label.Text = '가상폰이 부팅 중이에요. 첫 실행에는 시간이 걸려요.'
+        }
         [System.Windows.Forms.Application]::DoEvents()
         Start-Sleep -Seconds 2
     }
