@@ -1,0 +1,27 @@
+name: sticker_diary
+description: 내 사진으로 모으는 하루의 조각들
+publish_to: none
+version: 0.1.0+1
+environment:
+  sdk: ^3.12.0
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  image_picker: ^1.2.4
+  path_provider: ^2.1.5
+  google_mlkit_subject_segmentation: ^0.2.1
+  image: ^4.5.4
+  exif: ^3.3.0
+  uuid: ^4.5.1
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+flutter:
+  uses-material-design: true
+  fonts:
+    - family: NotoSansKR
+      fonts:
+        - asset: assets/fonts/NotoSansKR.ttf
