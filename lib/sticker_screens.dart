@@ -1,25 +1,37 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show compute;
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'models.dart';
 import 'store.dart';
 import 'photo_service.dart';
 import 'subject_model.dart';
+import 'subject_picker.dart';
+import 'photo_region_picker.dart';
 import 'widgets.dart';
 import 'diary_screens.dart';
 
 class StickerForm extends StatefulWidget {
-  const StickerForm({super.key, required this.store, this.recovered});
+  const StickerForm({
+    super.key,
+    required this.store,
+    this.recovered,
+    this.photoService,
+  });
   final DiaryStore store;
   final XFile? recovered;
+  final PhotoService? photoService;
   @override
   State<StickerForm> createState() => _StickerFormState();
 }
 
 class _StickerFormState extends State<StickerForm> {
-  final service = PhotoService();
+  late final service = widget.photoService ?? PhotoService();
   final name = TextEditingController();
   Uint8List? original, result;
+  Uint8List? fullPhoto;
+  CutoutResult? cutouts;
+  int? selectedSubject;
   DateTime? takenOn;
   bool busy = false, saving = false, canLeave = false, cutout = false;
   String? error;
@@ -47,7 +59,10 @@ class _StickerFormState extends State<StickerForm> {
       if (!mounted) return;
       setState(() {
         original = photo.png;
+        fullPhoto = photo.png;
         result = null;
+        cutouts = null;
+        selectedSubject = null;
         cutout = false;
         takenOn = photo.takenOn ?? (camera ? dateOnly(DateTime.now()) : null);
       });
@@ -88,7 +103,7 @@ class _StickerFormState extends State<StickerForm> {
       error = null;
     });
     try {
-      final png = await service.removeBackground(
+      final output = await service.removeBackground(
         original!,
         onProgress: (message) {
           if (mounted) setState(() => busyMessage = message);
@@ -96,8 +111,14 @@ class _StickerFormState extends State<StickerForm> {
       );
       if (mounted) {
         setState(() {
-          result = png;
-          cutout = true;
+          cutouts = output;
+          selectedSubject = output.subjects.length == 1 ? 0 : null;
+          result = output.subjects.length > 1
+              ? null
+              : output.subjects.length == 1
+              ? output.subjects.single.png
+              : output.combined;
+          cutout = result != null;
         });
       }
     } catch (failure, stack) {
@@ -113,6 +134,52 @@ class _StickerFormState extends State<StickerForm> {
       }
     } finally {
       if (mounted) setState(() => busy = false);
+    }
+  }
+
+  void _selectSubject(int index) => setState(() {
+    selectedSubject = index;
+    result = cutouts!.subjects[index].png;
+    cutout = true;
+    error = null;
+  });
+
+  Future<void> _chooseRegion() async {
+    final selected = await Navigator.push<Rect>(
+      context,
+      MaterialPageRoute(builder: (_) => PhotoRegionPicker(photo: fullPhoto!)),
+    );
+    if (selected == null || !mounted) return;
+    setState(() {
+      busy = true;
+      busyMessage = '선택한 범위를 준비하고 있어요…';
+      error = null;
+    });
+    try {
+      final cropped = await compute(cropPhotoRegion, {
+        'photo': fullPhoto!,
+        'left': selected.left,
+        'top': selected.top,
+        'right': selected.right,
+        'bottom': selected.bottom,
+      });
+      if (!mounted) return;
+      setState(() {
+        original = cropped;
+        cutouts = null;
+        selectedSubject = null;
+        result = null;
+        cutout = false;
+        busy = false;
+      });
+      await _remove();
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          busy = false;
+          error = '선택한 범위를 처리하지 못했어요. 다시 선택해 주세요.';
+        });
+      }
     }
   }
 
@@ -234,6 +301,14 @@ class _StickerFormState extends State<StickerForm> {
                                 ),
                               ],
                             )
+                          : cutouts != null &&
+                                cutouts!.subjects.length > 1 &&
+                                result == null
+                          ? SubjectPhotoPicker(
+                              photo: original!,
+                              cutouts: cutouts!,
+                              onSelect: busy || saving ? null : _selectSubject,
+                            )
                           : Image.memory(
                               result ?? original!,
                               fit: BoxFit.contain,
@@ -294,11 +369,32 @@ class _StickerFormState extends State<StickerForm> {
                 icon: const Icon(Icons.auto_awesome),
                 label: Text(cutout ? '다시 자동으로 오려내기' : '자동으로 오려내기'),
               ),
+              OutlinedButton.icon(
+                onPressed: busy || saving ? null : _chooseRegion,
+                icon: const Icon(Icons.crop),
+                label: const Text('범위를 선택해서 오려내기'),
+              ),
+              if (fullPhoto != null && !identical(original, fullPhoto))
+                TextButton(
+                  onPressed: busy || saving
+                      ? null
+                      : () => setState(() {
+                          original = fullPhoto;
+                          result = null;
+                          cutouts = null;
+                          selectedSubject = null;
+                          cutout = false;
+                          error = null;
+                        }),
+                  child: const Text('전체 사진으로 돌아가기'),
+                ),
               TextButton(
                 onPressed: busy || saving
                     ? null
                     : () => setState(() {
                         result = original;
+                        cutouts = null;
+                        selectedSubject = null;
                         cutout = false;
                         error = null;
                       }),
@@ -306,12 +402,30 @@ class _StickerFormState extends State<StickerForm> {
               ),
               Text(
                 result == null
-                    ? '처음에는 배경 제거 모델을 내려받아요. 사진은 기기 안에서 처리해요.'
+                    ? cutouts != null && cutouts!.subjects.length > 1
+                          ? '사진의 번호나 아래 대상 카드를 눌러 원하는 것 하나를 골라 주세요.'
+                          : '처음에는 배경 제거 모델을 내려받아요. 사진은 기기 안에서 처리해요.'
                     : cutout
                     ? '체크무늬가 보이는 부분은 투명하게 저장돼요. 결과를 확인해 주세요.'
                     : '배경을 포함한 사진 전체가 저장돼요.',
                 style: const TextStyle(color: muted, fontSize: 12, height: 1.6),
               ),
+              if (cutouts != null && cutouts!.subjects.length > 1) ...[
+                const SizedBox(height: 18),
+                SubjectChoiceStrip(
+                  cutouts: cutouts!,
+                  selected: selectedSubject,
+                  onSelect: busy || saving ? null : _selectSubject,
+                ),
+              ],
+              if (cutouts != null && cutouts!.subjects.length <= 1 && cutout)
+                const Padding(
+                  padding: EdgeInsets.only(top: 8),
+                  child: Text(
+                    '한 묶음을 찾았어요. 원하는 대상이 함께 잡히면 범위를 선택해서 다시 오려내세요.',
+                    style: TextStyle(color: muted, fontSize: 12, height: 1.5),
+                  ),
+                ),
             ],
             if (error != null)
               Padding(
