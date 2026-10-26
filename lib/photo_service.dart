@@ -6,6 +6,7 @@ import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'models.dart';
+import 'subject_model.dart';
 
 class PreparedPhoto {
   PreparedPhoto(this.png, this.takenOn);
@@ -93,10 +94,15 @@ class PhotoService {
     return PreparedPhoto(png, takenOn);
   }
 
-  Future<Uint8List> removeBackground(Uint8List png) async {
+  Future<Uint8List> removeBackground(
+    Uint8List png, {
+    ValueChanged<String>? onProgress,
+  }) async {
     if (!Platform.isAndroid) {
       throw UnsupportedError('자동 오려내기는 안드로이드 앱에서 사용할 수 있어요.');
     }
+    await const SubjectModelLoader().ensureReady(onProgress: onProgress);
+    onProgress?.call('사진에서 대상을 오려내고 있어요…');
     final dir = await getTemporaryDirectory();
     final input = File('${dir.path}/cutout-${uuid.v4()}.png');
     final segmenter = SubjectSegmenter(
@@ -111,9 +117,9 @@ class PhotoService {
     );
     try {
       await input.writeAsBytes(png);
-      final result = await segmenter.processImage(
-        InputImage.fromFilePath(input.path),
-      );
+      final result = await segmenter
+          .processImage(InputImage.fromFilePath(input.path))
+          .timeout(const Duration(seconds: 45));
       final foreground = result.foregroundBitmap;
       if (foreground == null || foreground.isEmpty) {
         throw const FormatException('대상을 분리하지 못했어요. 다른 사진으로 다시 시도해 주세요.');

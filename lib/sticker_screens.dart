@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import 'models.dart';
 import 'store.dart';
 import 'photo_service.dart';
+import 'subject_model.dart';
 import 'widgets.dart';
 import 'diary_screens.dart';
 
@@ -22,6 +23,7 @@ class _StickerFormState extends State<StickerForm> {
   DateTime? takenOn;
   bool busy = false, saving = false, canLeave = false, cutout = false;
   String? error;
+  String busyMessage = '사진을 준비하고 있어요…';
   @override
   void initState() {
     super.initState();
@@ -37,6 +39,7 @@ class _StickerFormState extends State<StickerForm> {
   Future<void> _prepare(XFile file, {bool camera = false}) async {
     setState(() {
       busy = true;
+      busyMessage = '사진을 준비하고 있어요…';
       error = null;
     });
     try {
@@ -85,18 +88,27 @@ class _StickerFormState extends State<StickerForm> {
       error = null;
     });
     try {
-      final png = await service.removeBackground(original!);
+      final png = await service.removeBackground(
+        original!,
+        onProgress: (message) {
+          if (mounted) setState(() => busyMessage = message);
+        },
+      );
       if (mounted) {
         setState(() {
           result = png;
           cutout = true;
         });
       }
-    } catch (_) {
+    } catch (failure, stack) {
+      debugPrint('Cutout failed: $failure\n$stack');
       if (mounted) {
         setState(
-          () => error =
-              '자동 오려내기를 완료하지 못했어요. 처음에는 인터넷에 연결해 모델을 준비해야 해요. 잠시 후 다시 시도하거나 다른 사진을 골라 주세요.',
+          () => error = failure is CutoutException
+              ? failure.message
+              : failure is FormatException
+              ? failure.message
+              : '모델은 준비됐지만 사진을 오려내지 못했어요. 다른 사진을 선택하거나 다시 시도해 주세요.',
         );
       }
     } finally {
@@ -200,7 +212,7 @@ class _StickerFormState extends State<StickerForm> {
               ),
               child: Stack(
                 children: [
-                  const Positioned.fill(
+                  Positioned.fill(
                     child: CustomPaint(painter: PaperPattern(checker: true)),
                   ),
                   Positioned.fill(
@@ -229,15 +241,23 @@ class _StickerFormState extends State<StickerForm> {
                     ),
                   ),
                   if (busy)
-                    const Positioned.fill(
+                    Positioned.fill(
                       child: ColoredBox(
                         color: Color(0xCCFAF6ED),
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            CircularProgressIndicator(),
-                            SizedBox(height: 16),
-                            Text('사진을 준비하고 있어요…'),
+                            const CircularProgressIndicator(),
+                            const SizedBox(height: 16),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 18,
+                              ),
+                              child: Text(
+                                busyMessage,
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
                           ],
                         ),
                       ),
